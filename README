@@ -1,0 +1,26 @@
+Augmented Reality System
+ 
+Input to Web-service (happens within com.ar.http.ConnectorService):
+The phone must send a minimum of three required parameters: latitude, longitude, and radius of returned POIs. Latitude and longitude are both automatically retrieved from the phone's GPS module while radius is user specified (but automatically set to a default value when the application loads up on the phone). The phone can communicate with the web-service using a HTTPClient object.
+
+Output from the Web-service(happens within com.ar.http.ConnectorService):
+The web-service will consume the request from the phone, take the necessary parameters using a HTTP-Get request, perform the SQL query, and return the results as a JSON serialized string.
+
+Input to the Phone from the Web-service (happens within com.ar.http.ConnectorService):
+
+Figuring out what is where
+The phone will somehow take the JSON response that it gets back from the web-service and store the results in some kind of local variable (array, list, etc). The essential components of each POI are the latitude and longitude. Using the latitude and longitude of each of the POIs, the following formula(s) can be used to determine the bearing of each POI relative to the user. 
+Theta (degrees) =(atan2(cos(lat1)*sin(lat2)-sin(lat1)*cos(lat2)*cos(lon2-lon1),sin(lon2-lon1)*cos(lat2)))*(180/pi)
+clockwise_bearing_from_north (0 degrees) = (Theta+360)%360
+Using this formula, a bearing can be calculated for each of the POIs surrounding the user.
+
+The bearings of each of the POIs are transferred back to the Activity using an Intent (inter-process communication). The Activity receives intents through a Broadcast Receiver. Once the Broadcast Receiver has received all points within the Line of Sight of the camera, then it transfers it to the View.  
+
+Getting it on the screen (com.android.imageoverlay.DrawOnTop.java)
+When it comes to visualizing POIs, the ones that are outside the field-of-view of the camera are not really important (until the camera pans over and those POIs come into line-of-sight of the camera). Along with the bearing, the camera will have a field-of-view associated with it (e.g. 130 degree field of view is split into two-65 degree quadrants). A POI is to be displayed if its bearing is within the range of the phone's current bearing +/- 65 degrees (each quadrant). 
+
+The bearing that was calculated in the subsequent steps for each POI will also be used as part of the visualization process. Bearings only need to be re-computed whenever the phone detects a change in GPS coordinates. The current heading of the phone will be considered the origin (center of the horizontal for both landscape and portrait modes), while the environment to the left and right of that bearing can be considered to be the left and right quadrants respectively. 
+
+The range of values offset from the bearing is [-65,65] degrees. Each degree translates to a select number of pixels away from the origin/center of the screen (e.g. 1 degree equals to 2 pixels for landscape mode, and 1 pixel for portrait). Because we are not taking into account POI distances relative to each other, we don't need to consider any kind of depth variation of the icons themselves. All we need to focus on is placing each icon on the right bearing marker. This means that the y-axis value of the POI icon will be fixed, but the x-axis value will vary based on the orientation of the phone.
+ 
+To determine what the x-axis value of the POI is, the bearing of the phone must be subtracted from the bearing of the POI. If the value is positive, then it will be in the right quadrant, and negative will be in the left quadrant. The actual scalar value itself will help determine the pixel offset. All bearings are converted so that instead of being represented by the traditional compass fashion [0,360), they are instead represented in the range of [-180,+180]. A negative offset means a left offset from the center of the screen and vice-versa. 
